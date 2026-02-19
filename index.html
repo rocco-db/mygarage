@@ -1450,6 +1450,41 @@
             font-weight: 700;
         }
 
+        /* Autocompletamento comuni */
+        #suggerimentiComuni {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: none;
+        }
+        #suggerimentiComuni.visible {
+            display: block;
+        }
+        .suggerimento-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+        .suggerimento-item:hover {
+            background: #f0f4ff;
+        }
+        .suggerimento-item:last-child {
+            border-bottom: none;
+        }
+        .suggerimento-nome {
+            font-weight: 600;
+            color: #333;
+        }
+        .suggerimento-codice {
+            font-size: 0.85em;
+            color: #888;
+            margin-left: 8px;
+        }
+
     </style>
 </head>
 <body>
@@ -1531,16 +1566,60 @@
                 </div>
                 <div class="accordion-body" id="body-utente">
                 <div class="form-group">
-                    <label for="nomeUtente">Nome e Cognome:</label>
-                    <input type="text" id="nomeUtente" placeholder="Es: Mario Rossi">
+                    <label for="nomeUtente">Nome:</label>
+                    <input type="text" id="nomeUtente" placeholder="Es: Mario" oninput="calcolaCodiceFiscale()">
+                </div>
+                <div class="form-group">
+                    <label for="cognomeUtente">Cognome:</label>
+                    <input type="text" id="cognomeUtente" placeholder="Es: Rossi" oninput="calcolaCodiceFiscale()">
                 </div>
                 <div class="form-group">
                     <label for="dataNascita">Data di Nascita:</label>
-                    <input type="date" id="dataNascita">
+                    <input type="date" id="dataNascita" onchange="calcolaCodiceFiscale()">
                 </div>
                 <div class="form-group">
-                    <label for="codiceFiscale">Codice Fiscale:</label>
-                    <input type="text" id="codiceFiscale" placeholder="Es: RSSMRA80A01H501U" maxlength="16">
+                    <label for="luogoNascita">Comune di Nascita:</label>
+                    <input type="text" id="luogoNascita" 
+                           placeholder="Inizia a digitare..." 
+                           autocomplete="off"
+                           oninput="filtraComuniNascita(this.value)">
+                    <div id="suggerimentiComuni" style="position:relative; z-index:100;"></div>
+                    <input type="hidden" id="codiceCatastaleNascita">
+                </div>
+                <div class="form-group">
+                    <label for="sessoUtente">Sesso:</label>
+                    <select id="sessoUtente" onchange="calcolaCodiceFiscale()">
+                        <option value="">-- Seleziona --</option>
+                        <option value="M">Maschio</option>
+                        <option value="F">Femmina</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="codiceFiscale">Codice Fiscale (calcolato automaticamente):</label>
+                    <input type="text" id="codiceFiscale" readonly 
+                           style="background:#f0f4ff; font-weight:700; font-family:monospace; letter-spacing:2px;"
+                           placeholder="Compila i dati sopra">
+                </div>
+
+                <h4 style="color:#667eea; margin-top:25px; margin-bottom:12px;">📍 Residenza (opzionale)</h4>
+                <div class="form-group">
+                    <label for="indirizzoResidenza">Indirizzo:</label>
+                    <input type="text" id="indirizzoResidenza" placeholder="Es: Via Roma, 10">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px;">
+                    <div class="form-group">
+                        <label for="capResidenza">CAP:</label>
+                        <input type="text" id="capResidenza" placeholder="00100" maxlength="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="cittaResidenza">Città:</label>
+                        <input type="text" id="cittaResidenza" placeholder="Es: Roma">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="provinciaResidenza">Provincia:</label>
+                    <input type="text" id="provinciaResidenza" placeholder="Es: RM" maxlength="2" 
+                           style="text-transform:uppercase;">
                 </div>
                 <button class="btn btn-primary" onclick="salvaUtente()">💾 Salva Dati Utente</button>
 
@@ -2782,48 +2861,252 @@
 
         // Funzione per salvare i dati utente
         function salvaUtente() {
-            const nome = document.getElementById('nomeUtente').value.trim();
-            const dataNascita = document.getElementById('dataNascita').value;
-            const cf = document.getElementById('codiceFiscale').value.toUpperCase().trim();
+            const nome = document.getElementById('nomeUtente')?.value.trim() || '';
+            const cognome = document.getElementById('cognomeUtente')?.value.trim() || '';
+            const nomeCompleto = nome + (cognome ? ' ' + cognome : '');
+
+            if (!nomeCompleto) {
+                alert('Inserisci almeno il nome!');
+                return;
+            }
+
+            datiUtente = {
+                nome: nome,
+                cognome: cognome,
+                nomeCompleto: nomeCompleto,
+                dataNascita: document.getElementById('dataNascita')?.value || '',
+                luogoNascita: document.getElementById('luogoNascita')?.value.trim() || '',
+                sesso: document.getElementById('sessoUtente')?.value || '',
+                codiceFiscale: document.getElementById('codiceFiscale')?.value || '',
+                residenza: {
+                    indirizzo: document.getElementById('indirizzoResidenza')?.value.trim() || '',
+                    cap: document.getElementById('capResidenza')?.value.trim() || '',
+                    citta: document.getElementById('cittaResidenza')?.value.trim() || '',
+                    provincia: document.getElementById('provinciaResidenza')?.value.trim().toUpperCase() || ''
+                }
+            };
+
+            // Aggiorna l'utente corrente nell'array utenti
+            if (utenteCorrenteId !== null) {
+                const idx = utenti.findIndex(u => u.id === utenteCorrenteId);
+                if (idx >= 0) {
+                    utenti[idx].nome = nome;
+                    utenti[idx].cognome = cognome;
+                    utenti[idx].nomeCompleto = nomeCompleto;
+                    utenti[idx].dataNascita = datiUtente.dataNascita;
+                    utenti[idx].luogoNascita = datiUtente.luogoNascita;
+                    utenti[idx].sesso = datiUtente.sesso;
+                    utenti[idx].codiceFiscale = datiUtente.codiceFiscale;
+                    utenti[idx].residenza = datiUtente.residenza;
+                }
+            } else {
+                // Se non c'è utente corrente, creane uno nuovo
+                const nuovoUt = {
+                    id: Date.now(),
+                    nome: nome,
+                    cognome: cognome,
+                    nomeCompleto: nomeCompleto,
+                    dataNascita: datiUtente.dataNascita,
+                    luogoNascita: datiUtente.luogoNascita,
+                    sesso: datiUtente.sesso,
+                    codiceFiscale: datiUtente.codiceFiscale,
+                    residenza: datiUtente.residenza,
+                    veicoli: [],
+                    datiPatente: {
+                        numero: '', categorie: '', dataRilascio: '', dataScadenza: '',
+                        enteRilascio: '', puntiAttuali: 20,
+                        documentoFrente: null, documentoRetro: null,
+                        infrazioni: [], rinnovi: []
+                    }
+                };
+                utenti.push(nuovoUt);
+                utenteCorrenteId = nuovoUt.id;
+            }
+
+            salvaDati();
+            mostraNotifica('Dati utente salvati!');
+            popolaSelettoreUtenti();
+        }
+        
+        // ===== CALCOLO AUTOMATICO CODICE FISCALE =====
+
+        // Tabella codici catastali comuni
+        const CODICI_CATASTALI = {
+            'roma': 'H501', 'milano': 'F205', 'napoli': 'F839', 'torino': 'L219',
+            'palermo': 'G273', 'genova': 'D969', 'bologna': 'A944', 'firenze': 'D612',
+            'bari': 'A662', 'catania': 'C351', 'venezia': 'L736', 'verona': 'L781',
+            'messina': 'F158', 'padova': 'G224', 'trieste': 'L424', 'brescia': 'B157',
+            'parma': 'G337', 'prato': 'G999', 'modena': 'F257', 'reggio calabria': 'H224',
+            'reggio emilia': 'H223', 'perugia': 'G478', 'livorno': 'E625', 'ravenna': 'H199',
+            'cagliari': 'B354', 'foggia': 'D643', 'rimini': 'H294', 'salerno': 'H703',
+            'ferrara': 'D548', 'sassari': 'I452', 'latina': 'E472', 'giugliano in campania': 'E054',
+            'monza': 'F704', 'siracusa': 'I754', 'pescara': 'G482', 'bergamo': 'A794',
+            'forlì': 'D704', 'trento': 'L378', 'vicenza': 'L840', 'terni': 'L117',
+            'bolzano': 'A952', 'novara': 'F952', 'piacenza': 'G535', 'ancona': 'A271',
+            'andria': 'A285', 'arezzo': 'A390', 'udine': 'L483', 'cesena': 'C573',
+            'lecce': 'E506', 'pesaro': 'G478', 'como': 'C933', 'pistoia': 'G713'
+        };
+
+        const MESI_CF = ['A','B','C','D','E','H','L','M','P','R','S','T'];
+
+        function calcolaCodiceFiscale() {
+            const nome = (document.getElementById('nomeUtente')?.value || '').trim().toUpperCase();
+            const cognome = (document.getElementById('cognomeUtente')?.value || '').trim().toUpperCase();
+            const dataNascita = document.getElementById('dataNascita')?.value || '';
+            const luogoNascita = (document.getElementById('luogoNascita')?.value || '').trim().toLowerCase();
+            const sesso = document.getElementById('sessoUtente')?.value || '';
+            const cfInput = document.getElementById('codiceFiscale');
+
+            // Verifica che tutti i campi siano compilati
+            if (!nome || !cognome || !dataNascita || !luogoNascita || !sesso) {
+                if (cfInput) cfInput.value = '';
+                return;
+            }
+
+            // Funzioni helper
+            const soloConsonanti = (str) => str.replace(/[AEIOU\s]/g, '');
+            const soloVocali = (str) => str.replace(/[^AEIOU]/g, '');
             
-            if (!nome || !dataNascita || !cf) {
-                alert('Compila tutti i campi utente!');
+            const getCodice3 = (str, isNome = false) => {
+                const cons = soloConsonanti(str);
+                const voc = soloVocali(str);
+                
+                // Se nome ha più di 3 consonanti, prendi 1a, 3a, 4a
+                if (isNome && cons.length >= 4) {
+                    return cons[0] + cons[2] + cons[3];
+                }
+                
+                // Altrimenti prendi prime 3 consonanti
+                let codice = cons.substring(0, 3);
+                
+                // Se mancano, aggiungi vocali
+                if (codice.length < 3) {
+                    codice += voc.substring(0, 3 - codice.length);
+                }
+                
+                // Se ancora mancano, aggiungi X
+                while (codice.length < 3) {
+                    codice += 'X';
+                }
+                
+                return codice.substring(0, 3);
+            };
+
+            // COGNOME (3 caratteri)
+            const cfCognome = getCodice3(cognome, false);
+
+            // NOME (3 caratteri)
+            const cfNome = getCodice3(nome, true);
+
+            // DATA DI NASCITA (5 caratteri: AA + MESE + GG)
+            const data = new Date(dataNascita);
+            const anno = data.getFullYear().toString().substring(2);
+            const mese = MESI_CF[data.getMonth()];
+            let giorno = data.getDate();
+            if (sesso === 'F') giorno += 40; // per le donne si aggiunge 40
+            const giornoStr = giorno.toString().padStart(2, '0');
+            const cfData = anno + mese + giornoStr;
+
+            // CODICE CATASTALE (4 caratteri)
+            let codiceCatastale = document.getElementById('codiceCatastaleNascita')?.value;
+            
+            if (!codiceCatastale) {
+                // Fallback: cerca nella tabella hardcoded
+                codiceCatastale = CODICI_CATASTALI[luogoNascita.toLowerCase()];
+            }
+            
+            if (!codiceCatastale) {
+                if (cfInput) cfInput.value = '⚠️ Seleziona comune dalla lista';
+                return;
+            }
+
+            // Codice Fiscale senza carattere di controllo
+            const cfParziale = cfCognome + cfNome + cfData + codiceCatastale;
+
+            // CARATTERE DI CONTROLLO
+            const VALORI_PARI = {
+                '0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,
+                'A':0,'B':1,'C':2,'D':3,'E':4,'F':5,'G':6,'H':7,'I':8,'J':9,'K':10,'L':11,'M':12,
+                'N':13,'O':14,'P':15,'Q':16,'R':17,'S':18,'T':19,'U':20,'V':21,'W':22,'X':23,'Y':24,'Z':25
+            };
+            const VALORI_DISPARI = {
+                '0':1,'1':0,'2':5,'3':7,'4':9,'5':13,'6':15,'7':17,'8':19,'9':21,
+                'A':1,'B':0,'C':5,'D':7,'E':9,'F':13,'G':15,'H':17,'I':19,'J':21,'K':2,'L':4,'M':18,
+                'N':20,'O':11,'P':3,'Q':6,'R':8,'S':12,'T':14,'U':16,'V':10,'W':22,'X':25,'Y':24,'Z':23
+            };
+            const LETTERE_CONTROLLO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+            let somma = 0;
+            for (let i = 0; i < 15; i++) {
+                const char = cfParziale[i];
+                // Posizioni dispari (1,3,5...) = indici 0,2,4...
+                somma += (i % 2 === 0) ? VALORI_DISPARI[char] : VALORI_PARI[char];
+            }
+            const carattereControllo = LETTERE_CONTROLLO[somma % 26];
+
+            // CODICE FISCALE COMPLETO
+            const codiceFiscaleCompleto = cfParziale + carattereControllo;
+
+            if (cfInput) {
+                cfInput.value = codiceFiscaleCompleto;
+            }
+        }
+
+        // ===== AUTOCOMPLETAMENTO COMUNI =====
+        
+        let comuniDB = [];
+        
+        // Carica database comuni all'avvio
+        fetch('./codici-catastali.json')
+            .then(r => r.json())
+            .then(data => {
+                comuniDB = data;
+                console.log('✅ Caricati', comuniDB.length, 'comuni');
+            })
+            .catch(err => console.error('Errore caricamento comuni:', err));
+        
+        function filtraComuniNascita(query) {
+            const container = document.getElementById('suggerimentiComuni');
+            
+            if (!query || query.length < 2) {
+                container.classList.remove('visible');
                 return;
             }
             
-            if (utenteCorrenteId === null) {
-                // Crea nuovo utente
-                const nuovoId = Date.now();
-                const utente = {
-                    id: nuovoId,
-                    nome, dataNascita,
-                    codiceFiscale: cf,
-                    veicoli: [],
-                    datiPatente: {
-                        numero: '', categorie: '', dataRilascio: '',
-                        dataScadenza: '', enteRilascio: '', puntiAttuali: 20,
-                        documentoFrente: null, documentoRetro: null, infrazioni: []
-                    }
-                };
-                utenti.push(utente);
-                utenteCorrenteId = nuovoId;
-                mostraNotifica('Nuovo utente creato!');
-            } else {
-                // Aggiorna utente esistente
-                const utente = utenti.find(u => u.id === utenteCorrenteId);
-                if (utente) {
-                    utente.nome = nome;
-                    utente.dataNascita = dataNascita;
-                    utente.codiceFiscale = cf;
-                }
-                mostraNotifica('Dati utente aggiornati!');
+            const queryLower = query.toLowerCase();
+            const risultati = comuniDB.filter(c => 
+                c.nome.toLowerCase().includes(queryLower)
+            ).slice(0, 10); // Max 10 risultati
+            
+            if (risultati.length === 0) {
+                container.innerHTML = '<div style="padding:10px; color:#888;">Nessun comune trovato</div>';
+                container.classList.add('visible');
+                return;
             }
             
-            // Sincronizza variabili globali
-            sincronizzaUtenteCorrente();
-            salvaDati();
-            popolaSelettoreUtenti();
+            container.innerHTML = risultati.map(c => `
+                <div class="suggerimento-item" onclick="selezionaComune('${c.nome}', '${c.codice}')">
+                    <span class="suggerimento-nome">${c.nome}</span>
+                    <span class="suggerimento-codice">${c.codice}</span>
+                </div>
+            `).join('');
+            
+            container.classList.add('visible');
         }
+        
+        function selezionaComune(nome, codice) {
+            document.getElementById('luogoNascita').value = nome;
+            document.getElementById('codiceCatastaleNascita').value = codice;
+            document.getElementById('suggerimentiComuni').classList.remove('visible');
+            calcolaCodiceFiscale();
+        }
+        
+        // Chiudi suggerimenti se si clicca fuori
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#luogoNascita') && !e.target.closest('#suggerimentiComuni')) {
+                document.getElementById('suggerimentiComuni').classList.remove('visible');
+            }
+        });
 
         // Funzione per aggiungere un veicolo
         function aggiungiVeicolo() {
@@ -4393,6 +4676,12 @@
 
         // Aggiorna contatori nelle impostazioni
         function aggiornaContatori() {
+            // Nome utente nelle intestazioni
+            const nomeUtenteGestione = document.getElementById('nome-utente-gestione');
+            if (nomeUtenteGestione && utenteCorrenteId !== null) {
+                const utente = utenti.find(u => u.id === utenteCorrenteId);
+                nomeUtenteGestione.textContent = utente?.nomeCompleto || utente?.nome || 'questo utente';
+            }
             // Contatori nella sezione gestione dati (dentro accordion utente)
             const elVeicoli = document.getElementById('count-veicoli-utente');
             const elDocs = document.getElementById('count-documenti-utente');
@@ -4954,15 +5243,30 @@
             // Reset form per nuovo utente
             utenteCorrenteId = null;
             document.getElementById('nomeUtente').value = '';
+            document.getElementById('cognomeUtente').value = '';
             document.getElementById('dataNascita').value = '';
+            document.getElementById('luogoNascita').value = '';
+            document.getElementById('sessoUtente').value = '';
             document.getElementById('codiceFiscale').value = '';
+            document.getElementById('indirizzoResidenza').value = '';
+            document.getElementById('capResidenza').value = '';
+            document.getElementById('cittaResidenza').value = '';
+            document.getElementById('provinciaResidenza').value = '';
             document.getElementById('selettoreUtente').value = '';
+            
+            // Reset datiUtente
+            datiUtente = {
+                nome: '', cognome: '', nomeCompleto: '',
+                dataNascita: '', luogoNascita: '', sesso: '', codiceFiscale: '',
+                residenza: { indirizzo: '', cap: '', citta: '', provincia: '' }
+            };
             
             // Reset patente
             datiPatente = {
                 numero: '', categorie: '', dataRilascio: '', dataScadenza: '',
                 enteRilascio: '', puntiAttuali: 20,
-                documentoFrente: null, documentoRetro: null, infrazioni: []
+                documentoFrente: null, documentoRetro: null,
+                infrazioni: [], rinnovi: []
             };
             
             // Reset veicoli
@@ -4999,47 +5303,81 @@
             mostraNotifica('Utente caricato: ' + datiUtente.nome);
         }
 
-        function salvaStatoUtenteCorrente() {
-            if (utenteCorrenteId === null) return;
-            const utente = utenti.find(u => u.id === utenteCorrenteId);
-            if (!utente) return;
-            
-            utente.nome = datiUtente.nome || '';
-            utente.dataNascita = datiUtente.dataNascita || '';
-            utente.codiceFiscale = datiUtente.codiceFiscale || '';
-            utente.veicoli = veicoli;
-            utente.datiPatente = datiPatente;
-        }
-
         function caricaStatoUtente(id) {
             const utente = utenti.find(u => u.id === id);
             if (!utente) return;
             
+            // Carica dati utente
             datiUtente = {
-                nome: utente.nome,
-                dataNascita: utente.dataNascita,
-                codiceFiscale: utente.codiceFiscale
+                nome: utente.nome || '',
+                cognome: utente.cognome || '',
+                nomeCompleto: utente.nomeCompleto || utente.nome || '',
+                dataNascita: utente.dataNascita || '',
+                luogoNascita: utente.luogoNascita || '',
+                sesso: utente.sesso || '',
+                codiceFiscale: utente.codiceFiscale || '',
+                residenza: utente.residenza || {
+                    indirizzo: '', cap: '', citta: '', provincia: ''
+                }
             };
+            
+            // Carica veicoli
             veicoli = utente.veicoli || [];
+            
+            // Carica patente
             datiPatente = utente.datiPatente || {
                 numero: '', categorie: '', dataRilascio: '', dataScadenza: '',
                 enteRilascio: '', puntiAttuali: 20,
-                documentoFrente: null, documentoRetro: null, infrazioni: []
+                documentoFrente: null, documentoRetro: null, 
+                infrazioni: [], rinnovi: []
             };
             
-            // Popola form
+            // Popola form dati utente
             document.getElementById('nomeUtente').value = datiUtente.nome || '';
+            document.getElementById('cognomeUtente').value = datiUtente.cognome || '';
             document.getElementById('dataNascita').value = datiUtente.dataNascita || '';
+            document.getElementById('luogoNascita').value = datiUtente.luogoNascita || '';
+            document.getElementById('sessoUtente').value = datiUtente.sesso || '';
             document.getElementById('codiceFiscale').value = datiUtente.codiceFiscale || '';
+            
+            // Popola residenza
+            document.getElementById('indirizzoResidenza').value = datiUtente.residenza?.indirizzo || '';
+            document.getElementById('capResidenza').value = datiUtente.residenza?.cap || '';
+            document.getElementById('cittaResidenza').value = datiUtente.residenza?.citta || '';
+            document.getElementById('provinciaResidenza').value = datiUtente.residenza?.provincia || '';
+            
+            // Popola form patente
             document.getElementById('numeroPatente').value = datiPatente.numero || '';
             document.getElementById('categoriaPatente').value = datiPatente.categorie || '';
             document.getElementById('dataRilascioPatente').value = datiPatente.dataRilascio || '';
             document.getElementById('dataScadenzaPatente').value = datiPatente.dataScadenza || '';
             document.getElementById('enteRilascio').value = datiPatente.enteRilascio || '';
             document.getElementById('puntiPatente').value = datiPatente.puntiAttuali || 20;
+            
             aggiornaPuntiDisplay();
             mostraDocumentiPatente();
             mostraInfrazioni();
+            mostraRinnoviPatente();
+            aggiornaVisualizzazionePatente();
+        }
+
+        function salvaStatoUtenteCorrente() {
+            if (utenteCorrenteId === null) return;
+            
+            const idx = utenti.findIndex(u => u.id === utenteCorrenteId);
+            if (idx < 0) return;
+            
+            // Aggiorna tutti i dati dell'utente corrente nell'array
+            utenti[idx].nome = datiUtente.nome || '';
+            utenti[idx].cognome = datiUtente.cognome || '';
+            utenti[idx].nomeCompleto = datiUtente.nomeCompleto || datiUtente.nome || '';
+            utenti[idx].dataNascita = datiUtente.dataNascita || '';
+            utenti[idx].luogoNascita = datiUtente.luogoNascita || '';
+            utenti[idx].sesso = datiUtente.sesso || '';
+            utenti[idx].codiceFiscale = datiUtente.codiceFiscale || '';
+            utenti[idx].residenza = datiUtente.residenza || {};
+            utenti[idx].veicoli = veicoli;
+            utenti[idx].datiPatente = datiPatente;
         }
 
         function sincronizzaUtenteCorrente() {
@@ -5062,7 +5400,7 @@
             const utente = utenti.find(u => u.id === utenteCorrenteId);
             if (!utente) return;
             
-            if (!confirm(`Eliminare definitivamente l'utente "${utente.nome}" e tutti i suoi dati?`)) return;
+            if (!confirm(`Eliminare definitivamente l'utente "${utente.nomeCompleto || utente.nome}" e tutti i suoi dati?`)) return;
             
             utenti = utenti.filter(u => u.id !== utenteCorrenteId);
             utenteCorrenteId = null;
@@ -5071,7 +5409,8 @@
             datiPatente = {
                 numero: '', categorie: '', dataRilascio: '', dataScadenza: '',
                 enteRilascio: '', puntiAttuali: 20,
-                documentoFrente: null, documentoRetro: null, infrazioni: []
+                documentoFrente: null, documentoRetro: null, 
+                infrazioni: [], rinnovi: []
             };
             
             // Carica il primo utente rimasto (se esiste)
@@ -5079,9 +5418,17 @@
                 utenteCorrenteId = utenti[0].id;
                 caricaStatoUtente(utenteCorrenteId);
             } else {
+                // Reset tutti i campi se non ci sono più utenti
                 document.getElementById('nomeUtente').value = '';
+                document.getElementById('cognomeUtente').value = '';
                 document.getElementById('dataNascita').value = '';
+                document.getElementById('luogoNascita').value = '';
+                document.getElementById('sessoUtente').value = '';
                 document.getElementById('codiceFiscale').value = '';
+                document.getElementById('indirizzoResidenza').value = '';
+                document.getElementById('capResidenza').value = '';
+                document.getElementById('cittaResidenza').value = '';
+                document.getElementById('provinciaResidenza').value = '';
             }
             
             salvaDati();
@@ -5092,11 +5439,24 @@
 
         function popolaSelettoreUtenti() {
             const sel = document.getElementById('selettoreUtente');
+            if (!sel) return;
+            
             sel.innerHTML = '<option value="">— Nessun utente —</option>';
+            
             utenti.forEach(u => {
                 const opt = document.createElement('option');
                 opt.value = u.id;
-                opt.textContent = u.nome + ' (' + u.codiceFiscale + ')';
+                
+                // Usa nome completo se disponibile, altrimenti nome + cognome
+                const nomeVisualizzato = u.nomeCompleto || 
+                                        (u.nome + (u.cognome ? ' ' + u.cognome : '')) || 
+                                        'Utente senza nome';
+                
+                // Mostra CF solo se presente
+                opt.textContent = u.codiceFiscale 
+                    ? `${nomeVisualizzato} (${u.codiceFiscale})` 
+                    : nomeVisualizzato;
+                
                 if (u.id === utenteCorrenteId) opt.selected = true;
                 sel.appendChild(opt);
             });
