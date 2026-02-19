@@ -1,12 +1,12 @@
 const CACHE_NAME = 'mygarage-v3';
 
 const FILE_DA_CACHEARE = [
-    '/',
-    '/index.html',
-    '/manifest.json',
-    '/icon-192.png',
-    '/icon-512.png',
-    '/favicon-32.png'
+    '/mygarage/',
+    '/mygarage/index.html',
+    '/mygarage/manifest.json',
+    '/mygarage/icon-192.png',
+    '/mygarage/icon-512.png',
+    '/mygarage/favicon-32.png'
 ];
 
 // Installazione: cacha i file principali
