@@ -2379,6 +2379,91 @@
             </div>
         </div>
 
+        <!-- Modal per rifornimenti -->
+        <div id="modalRifornimento" class="modal">
+            <div class="modal-content">
+                <span class="close-modal" onclick="chiudiModalRifornimento()">&times;</span>
+                <h2>⛽ Aggiungi Rifornimento</h2>
+                <input type="hidden" id="rifornimento-veicoloId">
+                
+                <div class="form-group">
+                    <label for="rifornimento-data">Data:</label>
+                    <input type="date" id="rifornimento-data">
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-km">Chilometraggio:</label>
+                    <input type="number" id="rifornimento-km" placeholder="Es: 45230">
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-tipo">Tipo Carburante:</label>
+                    <select id="rifornimento-tipo">
+                        <option value="benzina">⛽ Benzina</option>
+                        <option value="diesel">🛢️ Diesel</option>
+                        <option value="gpl">💨 GPL</option>
+                        <option value="metano">💨 Metano</option>
+                        <option value="elettrico">⚡ Ricarica Elettrica</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-quantita">Quantità:</label>
+                    <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
+                        <input type="number" id="rifornimento-quantita" 
+                               placeholder="Es: 45.5" step="0.01">
+                        <select id="rifornimento-unita">
+                            <option value="litri">Litri</option>
+                            <option value="kg">Kg (metano)</option>
+                            <option value="kwh">kWh</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-prezzo-unitario">Prezzo unitario (€):</label>
+                    <input type="number" id="rifornimento-prezzo-unitario" 
+                           placeholder="Es: 1.85" step="0.001">
+                    <small style="display:block; color:#888; margin-top:4px;">
+                        Per elettrico: €/kWh | Per carburanti: €/litro
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-importo-totale">Importo Totale (€):</label>
+                    <input type="number" id="rifornimento-importo-totale" 
+                           placeholder="Es: 84.15" step="0.01"
+                           oninput="calcolaPrezzoUnitarioRifornimento()">
+                    <small style="display:block; color:#888; margin-top:4px;">
+                        💡 Oppure inserisci questo e il prezzo unitario si calcola automaticamente
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="rifornimento-pieno">
+                        Rifornimento a pieno
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-stazione">Stazione di servizio (opzionale):</label>
+                    <input type="text" id="rifornimento-stazione" 
+                           placeholder="Es: Eni Autostrada A1">
+                </div>
+
+                <div class="form-group">
+                    <label for="rifornimento-note">Note:</label>
+                    <textarea id="rifornimento-note" rows="2" 
+                              placeholder="Es: Self service, prezzi in aumento..."></textarea>
+                </div>
+
+                <button class="btn btn-success" onclick="salvaRifornimento()">💾 Salva Rifornimento</button>
+                <button class="btn" style="background:#999; color:white; margin-left:10px;" 
+                        onclick="chiudiModalRifornimento()">✖ Annulla</button>
+            </div>
+        </div>
+
         <!-- Modal modifica veicolo -->
         <div id="modalModificaVeicolo" class="modal-modifica">
             <div class="modal-modifica-content">
@@ -3375,6 +3460,16 @@
                                     onclick="apriModalEventiIncidentali('${veicolo.targa}')">
                                 ⚠️ Eventi Imprevisti
                             </button>
+                            <button class="btn btn-primary"
+                                    style="width:auto; margin:0; padding:8px 14px; font-size:0.88em; background:#27ae60;"
+                                    onclick="apriModalRifornimento(${veicolo.id})">
+                                ⛽ Rifornimenti (${(veicolo.rifornimenti||[]).length})
+                            </button>
+                            <button class="btn btn-primary"
+                                    style="width:auto; margin:0; padding:8px 14px; font-size:0.88em; background:#3498db;"
+                                    onclick="mostraStatisticheRifornimenti(${veicolo.id})">
+                                📊 Statistiche
+                            </button>
                         </div>
 
                     </div>
@@ -3423,7 +3518,8 @@
                     <div class="scadenza-item ${classe}">
                         <div>
                             <strong>Assicurazione</strong>
-                            ${nDocAss > 0 ? `<span class="accordion-badge" style="font-size:0.75em;">📎 ${nDocAss}</span>` : ''}<br>
+                            ${nDocAss > 0 ? `<span class="accordion-badge" style="font-size:0.75em; cursor:pointer;" 
+                                onclick="event.stopPropagation(); mostraDocumentiScadenza(${veicolo.id}, 'assicurazione')">📎 ${nDocAss}</span>` : ''}<br>
                             ${veicolo.assicurazione.compagnia} - Scadenza: ${formatData(veicolo.assicurazione.scadenza)}
                         </div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -3448,7 +3544,8 @@
                     <div class="scadenza-item ${classe}">
                         <div>
                             <strong>Bollo Auto</strong>
-                            ${nDocBollo > 0 ? `<span class="accordion-badge" style="font-size:0.75em;">📎 ${nDocBollo}</span>` : ''}<br>
+                            ${nDocBollo > 0 ? `<span class="accordion-badge" style="font-size:0.75em; cursor:pointer;" 
+                                onclick="event.stopPropagation(); mostraDocumentiScadenza(${veicolo.id}, 'bollo')">📎 ${nDocBollo}</span>` : ''}<br>
                             Scadenza: ${formatData(veicolo.bollo.scadenza)}
                         </div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -3473,7 +3570,8 @@
                     <div class="scadenza-item ${classe}">
                         <div>
                             <strong>Revisione</strong>
-                            ${nDocRev > 0 ? `<span class="accordion-badge" style="font-size:0.75em;">📎 ${nDocRev}</span>` : ''}<br>
+                            ${nDocRev > 0 ? `<span class="accordion-badge" style="font-size:0.75em; cursor:pointer;" 
+                                onclick="event.stopPropagation(); mostraDocumentiScadenza(${veicolo.id}, 'revisione')">📎 ${nDocRev}</span>` : ''}<br>
                             Scadenza: ${formatData(veicolo.revisione.scadenza)}
                         </div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -3487,6 +3585,67 @@
             }
             
             return html || '<p style="color: #999;">Nessuna scadenza impostata</p>';
+        }
+
+        // Mostra documenti di una specifica scadenza (assicurazione/bollo/revisione)
+        function mostraDocumentiScadenza(veicoloId, tipo) {
+            const veicolo = veicoli.find(v => v.id === veicoloId);
+            if (!veicolo || !veicolo[tipo]) return;
+
+            const docs = veicolo[tipo].documenti || [];
+            if (docs.length === 0) {
+                alert('Nessun documento caricato per questa scadenza.');
+                return;
+            }
+
+            const titoloMap = {
+                'assicurazione': '🛡️ Documenti Assicurazione',
+                'bollo': '💳 Documenti Bollo',
+                'revisione': '🔧 Documenti Revisione'
+            };
+
+            // Crea modal
+            let html = `
+                <div id="modalDocScadenza" style="
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.75); z-index: 1200;
+                    display: flex; justify-content: center; align-items: flex-end;">
+                    <div style="
+                        background: white; padding: 25px;
+                        border-radius: 20px 20px 0 0;
+                        width: 100%; max-width: 640px;
+                        max-height: 85vh; overflow-y: auto;
+                        animation: slideUp 0.3s ease;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="color: #667eea; margin:0;">${titoloMap[tipo] || 'Documenti'}</h2>
+                            <span onclick="document.getElementById('modalDocScadenza').remove()"
+                                style="font-size:1.8em; cursor:pointer; color:#999;">×</span>
+                        </div>
+                        <p style="color:#666; margin-bottom: 20px;">${veicolo.marca} ${veicolo.modello} — ${veicolo.targa}</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
+            `;
+
+            docs.forEach(doc => {
+                const isImg = doc.tipo && doc.tipo.startsWith('image/');
+                html += `
+                    <div style="position: relative; cursor: pointer; border: 2px solid #e0e0e0; 
+                                border-radius: 8px; padding: 8px; background: #f8f9fa;"
+                         onclick="apriDocumento('${doc.dataBase64}', '${doc.tipo}', '${doc.nome}')">
+                        ${isImg
+                            ? `<img src="${doc.dataBase64}" style="width:100%; height:120px; object-fit:cover; border-radius:6px;">`
+                            : `<div style="width:100%; height:120px; display:flex; align-items:center; 
+                                        justify-content:center; background:#e0e0e0; border-radius:6px; 
+                                        font-size:2.5em;">📄</div>`}
+                        <div style="margin-top:8px; font-size:0.8em; color:#666; 
+                                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${doc.nome}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div></div>`;
+            document.body.insertAdjacentHTML('beforeend', html);
         }
 
         // Mostra tutte le scadenze
@@ -3949,6 +4108,155 @@
             aggiornaInterfaccia();
         }
 
+        // ===== GESTIONE RIFORNIMENTI =====
+
+            function apriModalRifornimento(veicoloId) {
+                const veicolo = veicoli.find(v => v.id === veicoloId);
+                if (!veicolo) return;
+
+                document.getElementById('rifornimento-veicoloId').value = veicoloId;
+                document.getElementById('rifornimento-data').value = new Date().toISOString().split('T')[0];
+                document.getElementById('rifornimento-km').value = veicolo.kmAttuali || '';
+                
+                // Preseleziona tipo carburante in base all'alimentazione del veicolo
+                const tipoCarburante = {
+                    'benzina': 'benzina',
+                    'diesel': 'diesel',
+                    'gpl': 'gpl',
+                    'metano': 'metano',
+                    'elettrico': 'elettrico',
+                    'ibrido': 'benzina'
+                };
+                document.getElementById('rifornimento-tipo').value = tipoCarburante[veicolo.alimentazione] || 'benzina';
+                
+                // Reset campi
+                document.getElementById('rifornimento-quantita').value = '';
+                document.getElementById('rifornimento-prezzo-unitario').value = '';
+                document.getElementById('rifornimento-importo-totale').value = '';
+                document.getElementById('rifornimento-pieno').checked = true;
+                document.getElementById('rifornimento-stazione').value = '';
+                document.getElementById('rifornimento-note').value = '';
+                
+                document.getElementById('modalRifornimento').classList.add('active');
+            }
+
+            function chiudiModalRifornimento() {
+                document.getElementById('modalRifornimento').classList.remove('active');
+            }
+
+            function calcolaPrezzoUnitarioRifornimento() {
+                const quantita = parseFloat(document.getElementById('rifornimento-quantita').value) || 0;
+                const totale = parseFloat(document.getElementById('rifornimento-importo-totale').value) || 0;
+                
+                if (quantita > 0 && totale > 0) {
+                    const prezzoUnitario = totale / quantita;
+                    document.getElementById('rifornimento-prezzo-unitario').value = prezzoUnitario.toFixed(3);
+                }
+            }
+
+            function salvaRifornimento() {
+                const veicoloId = parseInt(document.getElementById('rifornimento-veicoloId').value);
+                const veicolo = veicoli.find(v => v.id === veicoloId);
+                if (!veicolo) return;
+
+                const quantita = parseFloat(document.getElementById('rifornimento-quantita').value) || 0;
+                const prezzoUnitario = parseFloat(document.getElementById('rifornimento-prezzo-unitario').value) || 0;
+                const importoTotale = parseFloat(document.getElementById('rifornimento-importo-totale').value) || 0;
+                const km = parseInt(document.getElementById('rifornimento-km').value) || 0;
+
+                if (quantita <= 0) {
+                    alert('Inserisci la quantità di carburante!');
+                    return;
+                }
+
+                const rifornimento = {
+                    id: Date.now(),
+                    data: document.getElementById('rifornimento-data').value,
+                    km: km,
+                    tipo: document.getElementById('rifornimento-tipo').value,
+                    quantita: quantita,
+                    unita: document.getElementById('rifornimento-unita').value,
+                    prezzoUnitario: prezzoUnitario > 0 ? prezzoUnitario : (importoTotale / quantita),
+                    importoTotale: importoTotale > 0 ? importoTotale : (quantita * prezzoUnitario),
+                    pieno: document.getElementById('rifornimento-pieno').checked,
+                    stazione: document.getElementById('rifornimento-stazione').value,
+                    note: document.getElementById('rifornimento-note').value
+                };
+
+                if (!veicolo.rifornimenti) veicolo.rifornimenti = [];
+                veicolo.rifornimenti.push(rifornimento);
+
+                // Aggiorna km del veicolo se maggiori
+                if (km > (veicolo.kmAttuali || 0)) {
+                    veicolo.kmAttuali = km;
+                }
+
+                salvaDati();
+                chiudiModalRifornimento();
+                mostraNotifica('⛽ Rifornimento registrato!');
+                aggiornaInterfaccia();
+            }
+
+            function mostraStatisticheRifornimenti(veicoloId) {
+                const veicolo = veicoli.find(v => v.id === veicoloId);
+                if (!veicolo || !veicolo.rifornimenti || veicolo.rifornimenti.length === 0) {
+                    alert('Nessun rifornimento registrato per questo veicolo.');
+                    return;
+                }
+
+                const rif = [...veicolo.rifornimenti].sort((a, b) => new Date(a.data) - new Date(b.data));
+                
+                // Calcola consumi medi (solo rifornimenti a pieno)
+                const pieni = rif.filter(r => r.pieno && r.km > 0);
+                let consumoMedio = 0;
+                let costoMedioKm = 0;
+                
+                if (pieni.length >= 2) {
+                    let sommaConSumi = 0;
+                    let numeroConsumi = 0;
+                    
+                    for (let i = 1; i < pieni.length; i++) {
+                        const kmPercorsi = pieni[i].km - pieni[i-1].km;
+                        const litri = pieni[i].quantita;
+                        if (kmPercorsi > 0 && litri > 0) {
+                            const consumo = (litri / kmPercorsi) * 100;
+                            sommaConsumi += consumo;
+                            numeroConsumi++;
+                        }
+                    }
+                    
+                    if (numeroConsumi > 0) {
+                        consumoMedio = sommaConsumi / numeroConsumi;
+                    }
+                }
+
+                // Calcola spesa totale
+                const spesaTotale = rif.reduce((sum, r) => sum + r.importoTotale, 0);
+                const quantitaTotale = rif.reduce((sum, r) => sum + r.quantita, 0);
+
+                let msg = `⛽ STATISTICHE RIFORNIMENTI\n`;
+                msg += `${veicolo.marca} ${veicolo.modello} (${veicolo.targa})\n`;
+                msg += `${'='.repeat(50)}\n\n`;
+                msg += `📊 TOTALI:\n`;
+                msg += `  • Rifornimenti: ${rif.length}\n`;
+                msg += `  • Spesa totale: €${spesaTotale.toFixed(2)}\n`;
+                msg += `  • Quantità totale: ${quantitaTotale.toFixed(2)} ${rif[0].unita}\n`;
+                
+                if (consumoMedio > 0) {
+                    msg += `\n🔍 CONSUMO MEDIO:\n`;
+                    msg += `  • ${consumoMedio.toFixed(2)} L/100km\n`;
+                }
+                
+                msg += `\n📈 ULTIMI 5 RIFORNIMENTI:\n`;
+                rif.slice(-5).reverse().forEach(r => {
+                    msg += `\n  📅 ${formatData(r.data)} • ${r.km.toLocaleString()} km\n`;
+                    msg += `     ${r.quantita.toFixed(2)} ${r.unita} × €${r.prezzoUnitario.toFixed(3)} = €${r.importoTotale.toFixed(2)}\n`;
+                    if (r.stazione) msg += `     🏪 ${r.stazione}\n`;
+                });
+
+                alert(msg);
+            }
+
         function mostraStoricoCompleto(veicoloId) {
             const veicolo = veicoli.find(v => v.id === veicoloId);
             if (!veicolo) return;
@@ -3970,6 +4278,7 @@
                 });
             });
 
+            
             // Manutenzioni ordinarie eseguite
             (veicolo.manutenzioniOrdinarie || []).forEach(man => {
                 tuttiGliEventi.push({
