@@ -1595,10 +1595,31 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="codiceFiscale">Codice Fiscale (calcolato automaticamente):</label>
-                    <input type="text" id="codiceFiscale" readonly 
-                           style="background:#f0f4ff; font-weight:700; font-family:monospace; letter-spacing:2px;"
-                           placeholder="Compila i dati sopra">
+                    <label>Codice Fiscale:</label>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <button id="btn-cf-auto" onclick="setCfMode('auto')"
+                                style="padding:6px 14px; border:2px solid #667eea; border-radius:20px; background:#667eea; color:white; cursor:pointer; font-size:0.85em; font-weight:600;">
+                            🤖 Automatico
+                        </button>
+                        <button id="btn-cf-manuale" onclick="setCfMode('manuale')"
+                                style="padding:6px 14px; border:2px solid #667eea; border-radius:20px; background:white; color:#667eea; cursor:pointer; font-size:0.85em; font-weight:600;">
+                            ✏️ Manuale
+                        </button>
+                    </div>
+                    <div id="cf-auto-block">
+                        <input type="text" id="codiceFiscaleCalcolato" readonly
+                            style="background:#f0f4ff; font-weight:700; font-family:monospace; letter-spacing:2px;"
+                            placeholder="Compila i dati sopra per il calcolo automatico">
+                        <small style="color:#888;">⚙️ Calcolato automaticamente</small>
+                    </div>
+                    <div id="cf-manuale-block" style="display:none;">
+                        <input type="text" id="codiceFiscaleManuale"
+                            style="font-weight:700; font-family:monospace; letter-spacing:2px; text-transform:uppercase;"
+                            placeholder="Es: RSSMRA80A01H501Z" maxlength="16"
+                            oninput="this.value=this.value.toUpperCase()">
+                        <small style="color:#e67e22;">✏️ Inserisci manualmente</small>
+                    </div>
+                    <input type="hidden" id="codiceFiscale">
                 </div>
 
                 <h4 style="color:#667eea; margin-top:25px; margin-bottom:12px;">📍 Residenza (opzionale)</h4>
@@ -1661,10 +1682,7 @@
                             </button>
                         </div>
 
-                        <!-- FORM MODIFICA: nascosto, si apre solo su richiesta -->
-                        <div id="patente-tab-form" class="modal-tab-content"
-                            style="display:none;">
-
+                        
                         <!-- TAB FORM DATI PATENTE -->
                         <div id="patente-tab-form" class="modal-tab-content active">
 
@@ -2042,16 +2060,15 @@
             
             <!-- Tabs per navigazione -->
             <div class="tabs">                
-                <button class="tab active" onclick="cambiaTab('veicoli')">🚗 Veicoli</button>
-                <button class="tab" onclick="cambiaTab('aggiungi')">➕ Aggiungi</button>
-                <button class="tab" onclick="cambiaTab('scadenze')">📅 Scadenze</button>
-                <button class="tab" onclick="cambiaTab('spese')">💰 Spese</button>
-                
+                <button class="tab active" onclick="cambiaTab('veicoli', this)">🚗 Veicoli</button>
+                <button class="tab" onclick="cambiaTab('aggiungi', this)">➕ Aggiungi</button>
+                <button class="tab" onclick="cambiaTab('scadenze', this)">📅 Scadenze</button>
+                <button class="tab" onclick="cambiaTab('spese', this)">💰 Spese</button>                
             </div>
 
             <!-- Tab Veicoli -->
             <div id="tab-veicoli" class="tab-content active">
-                <div class="section accordion" id="tab-veicoli" style="background:#fff8f0; border-left-color:#e67e22;">
+                <div class="section accordion" id="accordion-veicoli" style="background:#fff8f0; border-left-color:#e67e22;">
                     <div class="accordion-header" onclick="toggleAccordion('body-lista-veicoli', this)">
                         <div class="accordion-status">
                             <h2>🚙 I Tuoi Veicoli</h2>
@@ -2901,6 +2918,60 @@
     </div>
     
     <script>
+        // ===== INDEXEDDB =====
+        const IDB_NAME = 'MyGarageFiles';
+        const IDB_VERSION = 1;
+        const IDB_STORE = 'files';
+        let idb = null;
+
+        function apriIDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+                req.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(IDB_STORE)) {
+                        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = e => { idb = e.target.result; resolve(idb); };
+                req.onerror = e => reject(e.target.error);
+            });
+        }
+
+        async function idbSet(id, data) {
+            const db = await apriIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                tx.objectStore(IDB_STORE).put({ id, data });
+                tx.oncomplete = () => resolve();
+                tx.onerror = e => reject(e.target.error);
+            });
+        }
+
+        async function idbGet(id) {
+            const db = await apriIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readonly');
+                const req = tx.objectStore(IDB_STORE).get(id);
+                req.onsuccess = e => resolve(e.target.result ? e.target.result.data : null);
+                req.onerror = e => reject(e.target.error);
+            });
+        }
+
+        async function idbDelete(id) {
+            const db = await apriIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                tx.objectStore(IDB_STORE).delete(id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = e => reject(e.target.error);
+            });
+        }
+
+        function fileId(prefisso) {
+            return prefisso + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        }
+
         // Database locale
         let utenti = [];                // array di tutti gli utenti
         let utenteCorrenteId = null;   // id utente selezionato
@@ -2962,7 +3033,8 @@
                 dataNascita: document.getElementById('dataNascita')?.value || '',
                 luogoNascita: document.getElementById('luogoNascita')?.value.trim() || '',
                 sesso: document.getElementById('sessoUtente')?.value || '',
-                codiceFiscale: document.getElementById('codiceFiscale')?.value || '',
+                codiceFiscale: getCfCorrente(),
+                cfMode: cfMode,
                 residenza: {
                     indirizzo: document.getElementById('indirizzoResidenza')?.value.trim() || '',
                     cap: document.getElementById('capResidenza')?.value.trim() || '',
@@ -3313,21 +3385,16 @@
         }
 
         // Cambia tab
-        function cambiaTab(nomeTab) {
-            // Rimuovi classe active da tutti i tab
+        function cambiaTab(nomeTab, btnEl) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            // Aggiungi active al tab selezionato
-            event.target.classList.add('active');
-            document.getElementById('tab-' + nomeTab).classList.add('active');
+            if (btnEl) btnEl.classList.add('active');  // usa il parametro invece di event.target
+            const tabContent = document.getElementById('tab-' + nomeTab);
+            if (tabContent) tabContent.classList.add('active');
             
-            // Aggiorna le informazioni se necessario
-            if (nomeTab === 'scadenze') {
-                mostraScadenze();
-            } else if (nomeTab === 'spese') {
-                mostraRiepilogoSpese();
-            }
+            if (nomeTab === 'scadenze') mostraScadenze();
+            else if (nomeTab === 'spese') mostraRiepilogoSpese();
         }
 
         // Aggiorna interfaccia
@@ -4212,7 +4279,7 @@
                 let costoMedioKm = 0;
                 
                 if (pieni.length >= 2) {
-                    let sommaConSumi = 0;
+                    let sommaConsumi = 0;
                     let numeroConsumi = 0;
                     
                     for (let i = 1; i < pieni.length; i++) {
@@ -4468,7 +4535,7 @@
                 });
             });
             
-            if (alertScadenze.length > 0) {
+            if (alertScadenze.length > 0 && impostazioniNotifiche.abilitate) {
                 setTimeout(() => {
                     alert('ATTENZIONE SCADENZE!\n\n' + alertScadenze.join('\n'));
                 }, 1000);
@@ -4496,9 +4563,31 @@
         // Salva dati in localStorage E nella cartella dedicata (se disponibile)
         async function salvaDati() {
             // Salva stato utente corrente prima di serializzare
-            if (utenteCorrenteId !== null) salvaStatoUtenteCorrente();
-            
-            localStorage.setItem('utenti', JSON.stringify(utenti));
+            if (utenteCorrenteId !== null) {
+                salvaStatoUtenteCorrente(); 
+            }
+            // Rimuovi base64 dalle foto patente prima di salvare in localStorage
+            const utentiPuliti = utenti.map(u => {
+                const uc = { ...u };
+                if (uc.datiPatente) {
+                    const pc = { ...uc.datiPatente };
+                    delete pc.documentoFrente;
+                    delete pc.documentoRetro;
+                    uc.datiPatente = pc;
+                }
+                return uc;
+            });
+
+            try {
+                localStorage.setItem('utenti', JSON.stringify(utentiPuliti));
+            } catch(e) {
+                if (e.name === 'QuotaExceededError') {
+                    alert('⚠️ Spazio localStorage esaurito!\nLe immagini vengono ora salvate separatamente.\nRiprova a salvare.');
+                } else {
+                    console.error('Errore salvataggio:', e);
+                }
+                return;
+            }
             localStorage.setItem('utenteCorrenteId', JSON.stringify(utenteCorrenteId));
             // Mantieni retrocompatibilità
             localStorage.setItem('datiUtente', JSON.stringify(datiUtente));
@@ -4596,21 +4685,7 @@
             const ultimoBackup = localStorage.getItem('ultimoBackup');
             const elBackup = document.getElementById('data-ultimo-backup');
             if (elBackup && ultimoBackup) elBackup.textContent = ultimoBackup;
-
-            const patenteSalvata = localStorage.getItem('datiPatente');
-            if (patenteSalvata) {
-                datiPatente = JSON.parse(patenteSalvata);
-                // Carica i dati nei campi
-                document.getElementById('numeroPatente').value = datiPatente.numero || '';
-                document.getElementById('categoriaPatente').value = datiPatente.categorie || '';
-                document.getElementById('dataRilascioPatente').value = datiPatente.dataRilascio || '';
-                document.getElementById('dataScadenzaPatente').value = datiPatente.dataScadenza || '';
-                document.getElementById('enteRilascio').value = datiPatente.enteRilascio || '';
-                document.getElementById('puntiPatente').value = datiPatente.puntiAttuali || 20;
-                aggiornaPuntiDisplay();
-                mostraDocumentiPatente();
-            }
-            
+          
             if (notificheSalvate) {
                 impostazioniNotifiche = JSON.parse(notificheSalvate);
                 
@@ -4824,92 +4899,83 @@
         function importaDati(event) {
             const file = event.target.files[0];
             if (!file) return;
-
-            // Reset input subito così si può ricaricare lo stesso file
             event.target.value = '';
 
             const reader = new FileReader();
-
-            reader.onerror = function() {
-                mostraNotifica('❌ Errore nella lettura del file!');
-            };
+            reader.onerror = function() { alert('❌ Errore nella lettura del file!'); };
 
             reader.onload = function(e) {
                 let datiImportati;
-
-                // Tenta parsing JSON
                 try {
                     datiImportati = JSON.parse(e.target.result);
                 } catch (err) {
-                    mostraNotifica('❌ File non valido — non è un backup JSON corretto.');
+                    alert('❌ File non valido — non è un JSON corretto.\n\nDettaglio: ' + err.message);
                     return;
                 }
 
-                // Verifica che sia un backup dell'app
-                const haUtenti   = Array.isArray(datiImportati.utenti);
-                const haVeicoli  = Array.isArray(datiImportati.veicoli);
+                const haUtenti    = Array.isArray(datiImportati.utenti) && datiImportati.utenti.length > 0;
+                const haVeicoli   = Array.isArray(datiImportati.veicoli);
                 const haDatiUtente = datiImportati.datiUtente !== undefined;
 
                 if (!haUtenti && !haVeicoli && !haDatiUtente) {
-                    mostraNotifica('❌ File non riconosciuto come backup di MyGarage.');
+                    alert('❌ File non riconosciuto come backup di MyGarage.\n\nAssicurati di importare un file esportato da questa app.');
                     return;
                 }
 
-                if (!confirm('Importare questo backup?\n\nI dati attuali verranno sovrascritti.\nL\'operazione non è reversibile.')) {
-                    return;
-                }
+                if (!confirm('Importare questo backup?\n\nI dati attuali verranno sovrascritti.\nL\'operazione non è reversibile.')) return;
 
                 try {
-                    // ── CASO 1: backup nuovo (sistema multi-utente) ──
                     if (haUtenti) {
                         localStorage.setItem('utenti', JSON.stringify(datiImportati.utenti));
-
-                        // Ripristina utente corrente se presente
-                        if (datiImportati.utenteCorrenteId !== undefined) {
-                            localStorage.setItem('utenteCorrenteId',
-                                JSON.stringify(datiImportati.utenteCorrenteId));
-                        } else if (datiImportati.utenti.length > 0) {
-                            localStorage.setItem('utenteCorrenteId',
-                                JSON.stringify(datiImportati.utenti[0].id));
+                        
+                        // Imposta utente corrente in modo sicuro
+                        let idDaImpostare = null;
+                        if (datiImportati.utenteCorrenteId !== undefined && datiImportati.utenteCorrenteId !== null) {
+                            // Verifica che l'id esista davvero nell'array
+                            const esiste = datiImportati.utenti.find(u => u.id === datiImportati.utenteCorrenteId);
+                            if (esiste) idDaImpostare = datiImportati.utenteCorrenteId;
                         }
-                    }
+                        if (idDaImpostare === null) {
+                            idDaImpostare = datiImportati.utenti[0].id;
+                        }
+                        localStorage.setItem('utenteCorrenteId', JSON.stringify(idDaImpostare));
 
-                    // ── CASO 2: backup vecchio (singolo utente) → converti ──
-                    else if (haVeicoli || haDatiUtente) {
+                    } else if (haVeicoli || haDatiUtente) {
                         const utenteConvertito = {
                             id: Date.now(),
                             nome: datiImportati.datiUtente?.nome || 'Utente Importato',
+                            cognome: datiImportati.datiUtente?.cognome || '',
+                            nomeCompleto: datiImportati.datiUtente?.nomeCompleto || datiImportati.datiUtente?.nome || 'Utente Importato',
                             dataNascita: datiImportati.datiUtente?.dataNascita || '',
+                            luogoNascita: datiImportati.datiUtente?.luogoNascita || '',
+                            sesso: datiImportati.datiUtente?.sesso || '',
                             codiceFiscale: datiImportati.datiUtente?.codiceFiscale || '',
+                            residenza: datiImportati.datiUtente?.residenza || {},
                             veicoli: datiImportati.veicoli || [],
                             datiPatente: datiImportati.datiPatente || {
                                 numero: '', categorie: '', dataRilascio: '',
                                 dataScadenza: '', enteRilascio: '', puntiAttuali: 20,
-                                documentoFrente: null, documentoRetro: null, infrazioni: []
+                                documentoFrente: null, documentoRetro: null,
+                                infrazioni: [], rinnovi: []
                             }
                         };
                         localStorage.setItem('utenti', JSON.stringify([utenteConvertito]));
-                        localStorage.setItem('utenteCorrenteId',
-                            JSON.stringify(utenteConvertito.id));
+                        localStorage.setItem('utenteCorrenteId', JSON.stringify(utenteConvertito.id));
                     }
 
-                    // Impostazioni notifiche
                     if (datiImportati.impostazioniNotifiche) {
-                        localStorage.setItem('impostazioniNotifiche',
-                            JSON.stringify(datiImportati.impostazioniNotifiche));
+                        localStorage.setItem('impostazioniNotifiche', JSON.stringify(datiImportati.impostazioniNotifiche));
                     }
-
-                    // File documenti
                     if (Array.isArray(datiImportati.fileDocumenti)) {
-                        localStorage.setItem('fileDocumenti',
-                            JSON.stringify(datiImportati.fileDocumenti));
+                        localStorage.setItem('fileDocumenti', JSON.stringify(datiImportati.fileDocumenti));
                     }
 
-                    mostraNotifica('✅ Backup importato con successo! Ricarico...');
-                    setTimeout(() => location.reload(), 1200);
+                    // Usa alert (sincrono) invece di mostraNotifica (asincrono) così l'utente vede il messaggio
+                    alert('✅ Backup importato con successo!\n\nL\'app verrà ricaricata.');
+                    location.reload();
 
                 } catch (errSalvataggio) {
-                    mostraNotifica('❌ Errore durante il salvataggio dei dati importati.');
+                    alert('❌ Errore durante il salvataggio dei dati importati.\n\nDettaglio: ' + errSalvataggio.message);
                     console.error('Errore importazione:', errSalvataggio);
                 }
             };
@@ -5054,6 +5120,12 @@
             }
             
             salvaDati();
+            // Forza sincronizzazione patente nell'utente corrente
+            if (utenteCorrenteId !== null) {
+                const idx = utenti.findIndex(u => u.id === utenteCorrenteId);
+                if (idx >= 0) utenti[idx].datiPatente = datiPatente;
+                
+            }
             aggiornaPuntiDisplay();
             mostraNotifica('Dati patente salvati con successo!');
             // Chiudi il form dopo il salvataggio
@@ -5094,37 +5166,46 @@
         // Gestione upload documenti patente
         let patenteFileTemporaneo = { fronte: null, retro: null };
 
-        function handlePatenteFile(event, lato) {
+        async function handlePatenteFile(event, lato) {
             const file = event.target.files[0];
             if (!file) return;
-            
-            if (file.size > 5 * 1024 * 1024) {
-                alert('Il file supera i 5MB!');
+            if (file.size > 2 * 1024 * 1024) {
+                alert('File troppo grande! Max 2MB per le foto della patente.');
                 return;
             }
-            
+
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const fileData = {
-                    nome: file.name,
-                    tipo: file.type,
-                    dimensione: file.size,
-                    data: new Date().toISOString(),
-                    dataBase64: e.target.result
-                };
-                
-                patenteFileTemporaneo[lato] = fileData;
-                
-                if (lato === 'fronte') {
-                    datiPatente.documentoFrente = fileData;
-                } else {
-                    datiPatente.documentoRetro = fileData;
+            reader.onload = async e => {
+                const base64 = e.target.result;
+                const prefisso = 'patente_' + (utenteCorrenteId || '0') + '_' + lato;
+
+                try {
+                    // Elimina foto precedente da IDB se esiste
+                    const vecchioId = lato === 'fronte' ? datiPatente.frenteIdbId : datiPatente.retroIdbId;
+                    if (vecchioId) await idbDelete(vecchioId);
+
+                    // Salva nuova foto in IDB
+                    const nuovoId = fileId(prefisso);
+                    await idbSet(nuovoId, { base64, tipo: file.type, nome: file.name });
+
+                    // Salva solo l'ID (non il base64) in datiPatente
+                    if (lato === 'fronte') datiPatente.frenteIdbId = nuovoId;
+                    else datiPatente.retroIdbId = nuovoId;
+
+                    // Forza sync con array utenti
+                    if (utenteCorrenteId !== null) {
+                        const idx = utenti.findIndex(u => u.id === utenteCorrenteId);
+                        if (idx >= 0) utenti[idx].datiPatente = { ...datiPatente };
+                    }
+
+                    await salvaDati();
+                    mostraPreviewPatenteBase64(base64, file.type, lato);
+                    mostraNotifica('📸 Foto salvata!');
+                } catch (err) {
+                    console.error('Errore salvataggio foto:', err);
+                    alert('Errore nel salvataggio della foto.');
                 }
-                
-                mostraPreviewPatente(fileData, lato);
-                salvaDati();
             };
-            
             reader.readAsDataURL(file);
         }
 
@@ -5150,6 +5231,17 @@
             }
             
             container.appendChild(div);
+        }
+
+        function mostraPreviewPatenteBase64(base64, tipo, lato) {
+            const containerId = lato === 'fronte' ? 'previewPatenteFrente' : 'previewPatenteRetro';
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const isImg = tipo && tipo.startsWith('image/');
+            container.innerHTML = `<div class="file-preview-item">
+                ${isImg ? `<img src="${base64}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;">📄</div>'}
+                <button class="remove-file" onclick="rimuoviDocumentoPatente('${lato}')">×</button>
+            </div>`;
         }
 
         function rimuoviDocumentoPatente(lato) {
@@ -5629,6 +5721,12 @@
                     indirizzo: '', cap: '', citta: '', provincia: ''
                 }
             };
+
+            cfMode = utente.cfMode || 'auto';
+            setCfMode(cfMode);
+            if (cfMode === 'manuale') {
+                document.getElementById('codiceFiscaleManuale').value = utente.codiceFiscale || '';
+            }
             
             // Carica veicoli
             veicoli = utente.veicoli || [];
@@ -6902,6 +7000,42 @@
                 if (btn) btn.textContent = '✖ Chiudi Modifica';
                 // Scroll morbido al form
                 setTimeout(() => form.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }
+        }
+
+        let cfMode = 'auto';
+
+        function setCfMode(mode) {
+            cfMode = mode;
+            const btnAuto = document.getElementById('btn-cf-auto');
+            const btnMan  = document.getElementById('btn-cf-manuale');
+            const blockAuto = document.getElementById('cf-auto-block');
+            const blockMan  = document.getElementById('cf-manuale-block');
+
+            if (mode === 'auto') {
+                btnAuto.style.background = '#667eea'; btnAuto.style.color = 'white';
+                btnMan.style.background  = 'white';   btnMan.style.color  = '#667eea';
+                blockAuto.style.display = 'block';
+                blockMan.style.display  = 'none';
+                calcolaCodiceFiscale();
+            } else {
+                btnAuto.style.background = 'white';   btnAuto.style.color = '#667eea';
+                btnMan.style.background  = '#667eea'; btnMan.style.color  = 'white';
+                blockAuto.style.display = 'none';
+                blockMan.style.display  = 'block';
+                // Precompila con il CF già calcolato
+                const cfCalc = document.getElementById('codiceFiscaleCalcolato').value;
+                const cfMan  = document.getElementById('codiceFiscaleManuale');
+                if (!cfMan.value && cfCalc && !cfCalc.includes('⚠️')) cfMan.value = cfCalc;
+            }
+        }
+
+        function getCfCorrente() {
+            if (cfMode === 'manuale') {
+                return document.getElementById('codiceFiscaleManuale').value.toUpperCase().trim();
+            } else {
+                const v = document.getElementById('codiceFiscaleCalcolato').value;
+                return (v && !v.includes('⚠️')) ? v : '';
             }
         }
 
